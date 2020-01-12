@@ -10,7 +10,10 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        FragmentNavigation.navigate(this, new NewsListFragment(), 0);
+        getSupportFragmentManager()
+                .beginTransaction()
+                .replace(R.id.fragmentContainer, new NewsListFragment())
+                .commit();
     }
 
 }
