@@ -4,23 +4,17 @@ public class NewsData {
 
     private String title;
     private String description;
-    private String image;
+    private String urlToImage;
 
-    public NewsData(String title, String description, String image) {
-        this.title = title;
-        this.description = description;
-        this.image = image;
-    }
-
-    public String getTitle() {
+    public String getNewsTitle() {
         return title;
     }
 
-    public String getDescription() {
+    public String getNewsDescription() {
         return description;
     }
 
-    public String getImage() {
-        return image;
+    public String getNewsImage() {
+        return urlToImage;
     }
 }

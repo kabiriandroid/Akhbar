@@ -9,9 +9,24 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.ProgressBar;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
+import android.widget.Toast;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class NewsListFragment extends Fragment {
+
+    private ProgressBar progress;
+    private RelativeLayout failureView;
+    private RecyclerView newsRecycler;
+    private EditText searchInput;
+    private TextView toolbarTitle;
 
     @Nullable
     @Override
@@ -23,22 +38,80 @@ public class NewsListFragment extends Fragment {
     @Override
     public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        RecyclerView newsRecycler = (RecyclerView) view.findViewById(R.id.newsRecycler);
-        newsRecycler.setLayoutManager(new LinearLayoutManager(getContext()));
-        NewsData[] newsArray = new NewsData[]{
-                new NewsData("Akhbar 1", "Akhbar 1 desc Akhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 descAkhbar 1 desc", "https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png"),
-                new NewsData("Akhbar 2", "Akhbar 2 desc", "https://raw.githubusercontent.com/PHELAT/Poolakey/master/asset/Poolakey.jpg")
-        };
-        NewsAdapter adapter = new NewsAdapter(newsArray, new NewsItemClickListener() {
+
+        toolbarTitle = (TextView) view.findViewById(R.id.toolbarTitle);
+        searchInput = (EditText) view.findViewById(R.id.searchInput);
+
+        final ImageView searchAction = (ImageView) view.findViewById(R.id.actionSearch);
+        searchAction.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(NewsData data) {
-                getActivity().getSupportFragmentManager()
-                        .beginTransaction()
-                        .addToBackStack(null)
-                        .replace(R.id.fragmentContainer, new NewsDetailFragment())
-                        .commit();
+            public void onClick(View v) {
+                toolbarTitle.setVisibility(View.GONE);
+                searchInput.setVisibility(View.VISIBLE);
             }
         });
-        newsRecycler.setAdapter(adapter);
+
+        final Networking networking = new Networking();
+
+        progress = (ProgressBar) view.findViewById(R.id.progress);
+        failureView = (RelativeLayout) view.findViewById(R.id.failureView);
+        newsRecycler = (RecyclerView) view.findViewById(R.id.newsRecycler);
+        newsRecycler.setLayoutManager(new LinearLayoutManager(getContext()));
+        Button retryButton = (Button) view.findViewById(R.id.retryButton);
+        retryButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                failureView.setVisibility(View.GONE);
+                progress.setVisibility(View.VISIBLE);
+                fetchData(networking);
+            }
+        });
+
+        fetchData(networking);
+    }
+
+    private void fetchData(Networking networking) {
+        networking.getServer()
+                .getNewsList("America", "6fba2629782d465abd2dc5f427223cc0")
+                .enqueue(new Callback<ServerResponse>() {
+                    @Override
+                    public void onResponse(Call<ServerResponse> call, Response<ServerResponse> response) {
+                        progress.setVisibility(View.GONE);
+                        ServerResponse serverResponse = response.body();
+                        NewsAdapter adapter = new NewsAdapter(serverResponse.getArticles(), new NewsItemClickListener() {
+                            @Override
+                            public void onClick(NewsData data) {
+                                Bundle bundle = new Bundle();
+                                bundle.putString("newsTitle", data.getNewsTitle());
+                                bundle.putString("newsDescription", data.getNewsDescription());
+                                bundle.putString("newsImage", data.getNewsImage());
+                                NewsDetailFragment detailFragment = new NewsDetailFragment();
+                                detailFragment.setArguments(bundle);
+                                getActivity().getSupportFragmentManager()
+                                        .beginTransaction()
+                                        .addToBackStack(null)
+                                        .replace(R.id.fragmentContainer, detailFragment)
+                                        .commit();
+                            }
+                        });
+                        newsRecycler.setAdapter(adapter);
+                    }
+
+                    @Override
+                    public void onFailure(Call<ServerResponse> call, Throwable t) {
+                        progress.setVisibility(View.GONE);
+                        failureView.setVisibility(View.VISIBLE);
+                    }
+                });
+    }
+
+    public boolean canHandleBackPressed() {
+        boolean canHandleBackPressed = false;
+        if (searchInput.getVisibility() == View.VISIBLE) {
+            searchInput.setVisibility(View.GONE);
+            toolbarTitle.setVisibility(View.VISIBLE);
+            canHandleBackPressed = true;
+        }
+        return canHandleBackPressed;
     }
 }
