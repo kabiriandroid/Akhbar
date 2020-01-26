@@ -1,5 +1,6 @@
 package ir.akhbar;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
@@ -23,7 +24,7 @@ public class NewsDetailFragment extends Fragment {
     @Override
     public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        Bundle bundle = getArguments();
+        final Bundle bundle = getArguments();
         ImageView newsHeaderImage = (ImageView) view.findViewById(R.id.newsHeaderImage);
         TextView newsTitleText = (TextView) view.findViewById(R.id.newsTitle);
         TextView newsDescriptionText = (TextView) view.findViewById(R.id.newsDescription);
@@ -32,5 +33,16 @@ public class NewsDetailFragment extends Fragment {
         Glide.with(getContext())
                 .load(bundle.getString("newsImage"))
                 .into(newsHeaderImage);
+
+        ImageView shareAction = (ImageView) view.findViewById(R.id.shareAction);
+        shareAction.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent sharingIntent = new Intent(android.content.Intent.ACTION_SEND);
+                sharingIntent.setType("text/plain");
+                sharingIntent.putExtra(android.content.Intent.EXTRA_TEXT, bundle.getString("newsUrl"));
+                startActivity(Intent.createChooser(sharingIntent, "Share with:"));
+            }
+        });
     }
 }

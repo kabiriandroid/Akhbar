@@ -1,10 +1,13 @@
 package ir.akhbar;
 
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -23,10 +26,36 @@ import retrofit2.Response;
 public class NewsListFragment extends Fragment {
 
     private ProgressBar progress;
+    private ProgressBar searchProgress;
     private RelativeLayout failureView;
     private RecyclerView newsRecycler;
     private EditText searchInput;
     private TextView toolbarTitle;
+    private ImageView searchAction;
+
+    private Handler handler;
+    private Runnable searchRunnable;
+
+    private Networking networking;
+
+    private String searchQuery = "Iran";
+
+    private final String defaultQuery = "Iran";
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        networking = new Networking();
+        handler = new Handler();
+        searchRunnable = new Runnable() {
+            @Override
+            public void run() {
+                searchProgress.setVisibility(View.VISIBLE);
+                searchAction.setVisibility(View.GONE);
+                fetchData(networking, searchQuery);
+            }
+        };
+    }
 
     @Nullable
     @Override
@@ -42,7 +71,9 @@ public class NewsListFragment extends Fragment {
         toolbarTitle = (TextView) view.findViewById(R.id.toolbarTitle);
         searchInput = (EditText) view.findViewById(R.id.searchInput);
 
-        final ImageView searchAction = (ImageView) view.findViewById(R.id.actionSearch);
+        searchProgress = (ProgressBar) view.findViewById(R.id.searchProgress);
+
+        searchAction = (ImageView) view.findViewById(R.id.actionSearch);
         searchAction.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -51,7 +82,28 @@ public class NewsListFragment extends Fragment {
             }
         });
 
-        final Networking networking = new Networking();
+        searchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+
+            }
+
+            @Override
+            public void afterTextChanged(final Editable s) {
+                if (s.toString().isEmpty()) {
+                    searchQuery = defaultQuery;
+                } else {
+                    searchQuery = s.toString();
+                }
+                handler.removeCallbacks(searchRunnable);
+                handler.postDelayed(searchRunnable, 1000);
+            }
+        });
 
         progress = (ProgressBar) view.findViewById(R.id.progress);
         failureView = (RelativeLayout) view.findViewById(R.id.failureView);
@@ -63,20 +115,22 @@ public class NewsListFragment extends Fragment {
             public void onClick(View v) {
                 failureView.setVisibility(View.GONE);
                 progress.setVisibility(View.VISIBLE);
-                fetchData(networking);
+                fetchData(networking, defaultQuery);
             }
         });
 
-        fetchData(networking);
+        fetchData(networking, defaultQuery);
     }
 
-    private void fetchData(Networking networking) {
+    private void fetchData(Networking networking, String query) {
         networking.getServer()
-                .getNewsList("America", "6fba2629782d465abd2dc5f427223cc0")
+                .getNewsList(query, "6fba2629782d465abd2dc5f427223cc0")
                 .enqueue(new Callback<ServerResponse>() {
                     @Override
                     public void onResponse(Call<ServerResponse> call, Response<ServerResponse> response) {
                         progress.setVisibility(View.GONE);
+                        searchProgress.setVisibility(View.GONE);
+                        searchAction.setVisibility(View.VISIBLE);
                         ServerResponse serverResponse = response.body();
                         NewsAdapter adapter = new NewsAdapter(serverResponse.getArticles(), new NewsItemClickListener() {
                             @Override
@@ -85,6 +139,7 @@ public class NewsListFragment extends Fragment {
                                 bundle.putString("newsTitle", data.getNewsTitle());
                                 bundle.putString("newsDescription", data.getNewsDescription());
                                 bundle.putString("newsImage", data.getNewsImage());
+                                bundle.putString("newsUrl", data.getUrl());
                                 NewsDetailFragment detailFragment = new NewsDetailFragment();
                                 detailFragment.setArguments(bundle);
                                 getActivity().getSupportFragmentManager()
@@ -110,8 +165,20 @@ public class NewsListFragment extends Fragment {
         if (searchInput.getVisibility() == View.VISIBLE) {
             searchInput.setVisibility(View.GONE);
             toolbarTitle.setVisibility(View.VISIBLE);
+            searchProgress.setVisibility(View.VISIBLE);
+            searchAction.setVisibility(View.GONE);
+            fetchData(networking, defaultQuery);
             canHandleBackPressed = true;
         }
         return canHandleBackPressed;
+    }
+
+    @Override
+    public void onDestroyView() {
+        if (searchInput.getVisibility() == View.VISIBLE) {
+            searchInput.setVisibility(View.GONE);
+            toolbarTitle.setVisibility(View.VISIBLE);
+        }
+        super.onDestroyView();
     }
 }
