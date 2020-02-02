@@ -2,10 +2,12 @@ package ir.akhbar;
 
 import android.os.Bundle;
 import android.os.Handler;
-import android.support.annotation.Nullable;
-import android.support.v4.app.Fragment;
-import android.support.v7.widget.LinearLayoutManager;
-import android.support.v7.widget.RecyclerView;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.room.Room;
+
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.LayoutInflater;
@@ -17,7 +19,9 @@ import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
-import android.widget.Toast;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -42,9 +46,17 @@ public class NewsListFragment extends Fragment {
 
     private final String defaultQuery = "Iran";
 
+    private DatabaseThread databaseThread;
+
+    private NewsDao newsDao;
+
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ApplicationDatabase applicationDatabase = Room.databaseBuilder(getContext(), ApplicationDatabase.class, "application_database")
+                .build();
+        newsDao = applicationDatabase.getNewsDao();
+        databaseThread = new DatabaseThread();
         networking = new Networking();
         handler = new Handler();
         searchRunnable = new Runnable() {
@@ -128,36 +140,89 @@ public class NewsListFragment extends Fragment {
                 .enqueue(new Callback<ServerResponse>() {
                     @Override
                     public void onResponse(Call<ServerResponse> call, Response<ServerResponse> response) {
-                        progress.setVisibility(View.GONE);
-                        searchProgress.setVisibility(View.GONE);
-                        searchAction.setVisibility(View.VISIBLE);
-                        ServerResponse serverResponse = response.body();
-                        NewsAdapter adapter = new NewsAdapter(serverResponse.getArticles(), new NewsItemClickListener() {
-                            @Override
-                            public void onClick(NewsData data) {
-                                Bundle bundle = new Bundle();
-                                bundle.putString("newsTitle", data.getNewsTitle());
-                                bundle.putString("newsDescription", data.getNewsDescription());
-                                bundle.putString("newsImage", data.getNewsImage());
-                                bundle.putString("newsUrl", data.getUrl());
-                                NewsDetailFragment detailFragment = new NewsDetailFragment();
-                                detailFragment.setArguments(bundle);
-                                getActivity().getSupportFragmentManager()
-                                        .beginTransaction()
-                                        .addToBackStack(null)
-                                        .replace(R.id.fragmentContainer, detailFragment)
-                                        .commit();
-                            }
-                        });
-                        newsRecycler.setAdapter(adapter);
+                        updateRecyclerView(response.body().getArticles());
                     }
 
                     @Override
                     public void onFailure(Call<ServerResponse> call, Throwable t) {
                         progress.setVisibility(View.GONE);
-                        failureView.setVisibility(View.VISIBLE);
+                        final List<NewsTable> news = new ArrayList<>();
+                        databaseThread.addRunnable(new Runnable() {
+                            @Override
+                            public void run() {
+                                System.out.println("Code 1 " + Thread.currentThread().getName());
+                                news.addAll(newsDao.getAllNews());
+                                NewsData[] newsDatas = new NewsData[news.size()];
+                                if (!news.isEmpty()) {
+                                    for (int i = 0; i < news.size(); i++) {
+                                        NewsTable newsTable = news.get(i);
+                                        NewsData newsData = mapNewsTableToNewsData(newsTable);
+                                        newsDatas[i] = newsData;
+                                    }
+                                    updateRecyclerView(newsDatas);
+                                } else {
+                                    new Handler(getActivity().getMainLooper()).post(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            failureView.setVisibility(View.VISIBLE);
+                                        }
+                                    });
+                                }
+                            }
+                        });
                     }
                 });
+    }
+
+    private void updateRecyclerView(NewsData[] newsData) {
+        progress.setVisibility(View.GONE);
+        searchProgress.setVisibility(View.GONE);
+        searchAction.setVisibility(View.VISIBLE);
+        updateDatabase(newsData);
+        NewsAdapter adapter = new NewsAdapter(newsData, new NewsItemClickListener() {
+            @Override
+            public void onClick(NewsData data) {
+                Bundle bundle = new Bundle();
+                bundle.putString("newsTitle", data.getNewsTitle());
+                bundle.putString("newsDescription", data.getNewsDescription());
+                bundle.putString("newsImage", data.getNewsImage());
+                bundle.putString("newsUrl", data.getUrl());
+                NewsDetailFragment detailFragment = new NewsDetailFragment();
+                detailFragment.setArguments(bundle);
+                getActivity().getSupportFragmentManager()
+                        .beginTransaction()
+                        .addToBackStack(null)
+                        .replace(R.id.fragmentContainer, detailFragment)
+                        .commit();
+            }
+        });
+        newsRecycler.setAdapter(adapter);
+    }
+
+    private void updateDatabase(final NewsData[] newsData) {
+        databaseThread.addRunnable(new Runnable() {
+            @Override
+            public void run() {
+                List<NewsTable> news = new ArrayList<>();
+                for (NewsData newsData : newsData) {
+                    NewsTable newsTable = mapNewsDataToNewsTable(newsData);
+                    news.add(newsTable);
+                }
+                List<NewsTable> newsTables = newsDao.getAllNews();
+                if (!newsTables.isEmpty()) {
+                    newsDao.deleteAllNews(newsTables);
+                }
+                newsDao.addNewsList(news);
+            }
+        });
+    }
+
+    private NewsTable mapNewsDataToNewsTable(NewsData newsData) {
+        return new NewsTable(newsData.getNewsTitle(), newsData.getNewsDescription(), newsData.getNewsImage(), newsData.getUrl());
+    }
+
+    private NewsData mapNewsTableToNewsData(NewsTable newsTable) {
+        return new NewsData(newsTable.getTitle(), newsTable.getDescription(), newsTable.getUrlToImage(), newsTable.getUrl());
     }
 
     public boolean canHandleBackPressed() {
